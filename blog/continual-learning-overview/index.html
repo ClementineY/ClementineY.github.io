@@ -1,0 +1,505 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="A concise technical overview of continual learning: settings, benchmarks, metrics, method families, and recent research directions."
+    >
+    <title>Continual Learning: Benchmarks, Metrics, and Research Lines - Clementine Yang</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="site-title" href="/">Clementine Yang</a>
+      <nav aria-label="Primary navigation">
+        <a href="/blog/">Blog</a>
+        <a href="/research/">Research</a>
+        <a href="/talks/">Talks</a>
+        <a href="/about/">About</a>
+      </nav>
+    </header>
+
+    <main class="post">
+      <p class="meta"><a href="/blog/">Blog</a> / October 2026</p>
+      <h1>Continual Learning: Benchmarks, Metrics, and Research Lines</h1>
+      <p class="lede">
+        Continual learning asks for a model that can learn from a sequence of
+        changing data distributions while still performing well on what came
+        before. This sounds close to ordinary fine-tuning, but the constraint is
+        sharper: old data may be unavailable, future tasks are unknown, and the
+        final model is judged on the whole history rather than only the newest
+        task.
+      </p>
+
+      <section class="toc" aria-labelledby="contents">
+        <h2 id="contents">Contents</h2>
+        <ol>
+          <li><a href="#setup">Problem Setup</a></li>
+          <li><a href="#benchmarks">Common Benchmarks</a></li>
+          <li><a href="#metrics">Metrics</a></li>
+          <li><a href="#methods">Method Families</a></li>
+          <li><a href="#recent">Recent Research Lines</a></li>
+          <li><a href="#reading">How I Read the Field</a></li>
+        </ol>
+      </section>
+
+      <section id="setup">
+        <h2>Problem Setup</h2>
+        <p>
+          A continual learner receives tasks or experiences
+          <code>D1, D2, ..., Dt</code> in order. After training on
+          <code>Dt</code>, the model <code>f_t</code> should perform well on
+          all seen test distributions <code>D1_test, ..., Dt_test</code>. The
+          phrase "continual" therefore has two parts: the data are sequential,
+          and evaluation is cumulative.
+        </p>
+        <p>
+          The standard failure mode is <strong>catastrophic forgetting</strong>:
+          gradient updates that help the new task overwrite parameters useful
+          for old tasks. The deeper tension is the stability-plasticity dilemma.
+          A model that is too stable cannot learn the new distribution; a model
+          that is too plastic forgets the past.
+        </p>
+        <p>
+          Continual learning is easiest to reason about when the test protocol is
+          explicit:
+        </p>
+        <ul>
+          <li>
+            <strong>Task-incremental learning.</strong> The task identity is
+            known at test time. The model can choose the right head or prompt for
+            the task, so this is often the easiest protocol.
+          </li>
+          <li>
+            <strong>Domain-incremental learning.</strong> The label space is
+            shared, but the input distribution changes: new lighting, style,
+            sensor, geography, time period, or user population.
+          </li>
+          <li>
+            <strong>Class-incremental learning.</strong> New classes arrive over
+            time, and test examples must be classified among all seen classes
+            without a task ID. This is usually the hardest common image
+            classification setting because new-task data contain no old-class
+            negatives.
+          </li>
+          <li>
+            <strong>Task-free or online continual learning.</strong> Task
+            boundaries are unknown, or examples arrive in a stream with a small
+            number of passes. This is closer to deployment, but harder to compare
+            cleanly across papers.
+          </li>
+        </ul>
+      </section>
+
+      <section id="benchmarks">
+        <h2>Common Benchmarks</h2>
+        <p>
+          Benchmarks are not neutral: a method that shines on task-incremental
+          Split MNIST may fail on class-incremental CIFAR-100. Good reports state
+          the protocol, memory budget, task order, number of seeds, whether task
+          identity is used at test time, and whether pretrained features are
+          frozen or updated.
+        </p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Benchmark family</th>
+                <th>What it tests</th>
+                <th>Useful caveat</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Split, Permuted, and Rotated MNIST</td>
+                <td>Basic task/domain/class-incremental behavior.</td>
+                <td>Good for sanity checks, too small for claims about modern models.</td>
+              </tr>
+              <tr>
+                <td>Split CIFAR-10/100, TinyImageNet, ImageNet-R</td>
+                <td>Standard class-incremental vision protocols.</td>
+                <td>Results depend strongly on class order, augmentation, and memory size.</td>
+              </tr>
+              <tr>
+                <td>CORe50</td>
+                <td>Continuous object recognition with video-like object streams.</td>
+                <td>More realistic than class splits, especially for robotics-style input.</td>
+              </tr>
+              <tr>
+                <td>CLEAR-10/100</td>
+                <td>Temporal visual drift in internet imagery from 2004 to 2014.</td>
+                <td>Useful when the distribution shift is time rather than a hand-made task split.</td>
+              </tr>
+              <tr>
+                <td>DomainNet, PACS, OfficeHome-style streams</td>
+                <td>Domain shift with shared or overlapping label spaces.</td>
+                <td>Often closer to adaptation than class-incremental learning.</td>
+              </tr>
+              <tr>
+                <td>Continual World, Atari or Procgen task streams</td>
+                <td>Continual reinforcement learning and policy adaptation.</td>
+                <td>Forgetting can occur in representations, value heads, reward models, and policies differently.</td>
+              </tr>
+              <tr>
+                <td>TRACE, SuperNI-style task streams, continual pretraining corpora</td>
+                <td>Large language model task learning, knowledge update, and retention.</td>
+                <td>Need to separate parametric learning from retrieval, prompt memory, and benchmark contamination.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="metrics">
+        <h2>Metrics</h2>
+        <p>
+          Most metrics come from the accuracy matrix. Let <code>A[i,j]</code> be
+          performance on task <code>j</code> after training through task
+          <code>i</code>. The lower triangle of this matrix shows how each old
+          task changes as the stream progresses.
+        </p>
+        <ul>
+          <li>
+            <strong>Final average accuracy:</strong>
+            <code>ACC = (1/T) sum_j A[T,j]</code>. This is the most common
+            single-number result, but it hides how the model got there.
+          </li>
+          <li>
+            <strong>Forgetting:</strong>
+            <code>F_j = max_i&lt;T A[i,j] - A[T,j]</code>, averaged across old
+            tasks. This asks how much each task fell from its best historical
+            performance.
+          </li>
+          <li>
+            <strong>Backward transfer:</strong>
+            <code>BWT = avg_j&lt;T (A[T,j] - A[j,j])</code>. Negative BWT is
+            forgetting; positive BWT means later learning improved earlier
+            tasks.
+          </li>
+          <li>
+            <strong>Forward transfer:</strong> compare performance on a new task
+            before or during learning with a reference model trained only on that
+            task. Definitions vary, so the baseline must be named.
+          </li>
+          <li>
+            <strong>Plasticity or learning accuracy:</strong> how well the model
+            learns the current task compared with a single-task or joint-training
+            reference.
+          </li>
+          <li>
+            <strong>Resource metrics:</strong> memory buffer size, added
+            parameters, training FLOPs, wall-clock time, inference latency, and
+            number of passes over data.
+          </li>
+        </ul>
+        <p>
+          For language models, accuracy is not enough. Continual pretraining
+          papers usually track validation loss or perplexity on old and new
+          corpora, downstream benchmark retention, safety/alignment retention,
+          and sometimes exact knowledge-update success. For agents, one must ask
+          whether memory sits in weights, a retrieval database, an episodic log,
+          or a test-time state.
+        </p>
+      </section>
+
+      <section id="methods">
+        <h2>Method Families</h2>
+        <p>
+          A useful taxonomy asks where the old knowledge is protected: data,
+          logits, gradients, parameters, architecture, prompts, or external
+          memory.
+        </p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Family</th>
+                <th>Core idea</th>
+                <th>Examples</th>
+                <th>Best fit</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Replay</td>
+                <td>Mix current data with stored or generated old examples.</td>
+                <td>Experience replay, iCaRL, DER, GDumb, generative replay.</td>
+                <td>Often strongest for class-incremental learning when memory is allowed.</td>
+              </tr>
+              <tr>
+                <td>Regularization</td>
+                <td>Penalize changes to parameters or functions important for old tasks.</td>
+                <td>EWC, Synaptic Intelligence, MAS, LwF distillation.</td>
+                <td>Useful when storage is restricted; weaker when old class boundaries must be reconstructed.</td>
+              </tr>
+              <tr>
+                <td>Gradient constraint or editing</td>
+                <td>Modify the update so the new gradient does not increase old-task loss.</td>
+                <td>GEM, A-GEM, OGD-style orthogonal projection.</td>
+                <td>A principled bridge between replay and optimization, but can be expensive.</td>
+              </tr>
+              <tr>
+                <td>Architecture or parameter isolation</td>
+                <td>Allocate different subnetworks, masks, modules, or adapters to different tasks.</td>
+                <td>Progressive Nets, PackNet, HAT, adapters, LoRA branches, MoE routing.</td>
+                <td>Good when task identity or routing is available; watch parameter growth.</td>
+              </tr>
+              <tr>
+                <td>Prompt and representation methods</td>
+                <td>Freeze a pretrained backbone and learn small prompt or projection modules.</td>
+                <td>L2P, DualPrompt, CODA-Prompt, RanPAC.</td>
+                <td>Modern vision CL with strong pretrained models and limited update budgets.</td>
+              </tr>
+              <tr>
+                <td>Continual pretraining schedules</td>
+                <td>Resume large-model training with replay and learning-rate re-warming/re-decay.</td>
+                <td>LLM continual pretraining with replay mixtures.</td>
+                <td>Large language models where full retraining is too costly.</td>
+              </tr>
+              <tr>
+                <td>External memory and retrieval</td>
+                <td>Store experience outside model weights and retrieve it at inference time.</td>
+                <td>RAG, agent memory stores, semantic caches, episodic logs.</td>
+                <td>Practical systems, but not always "learning" in the classical parameter-update sense.</td>
+              </tr>
+              <tr>
+                <td>Test-time learning and neural memory</td>
+                <td>Let a hidden state or memory module update during inference.</td>
+                <td>TTT layers, Titans, HOPE-style nested memory.</td>
+                <td>Emerging sequence-model research; promising but not yet settled as standard CL.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="recent">
+        <h2>Recent Research Lines</h2>
+        <h3>1. Replay Is Still Hard to Beat</h3>
+        <p>
+          Replay remains the practical baseline because it directly restores
+          old-task input coverage. iCaRL combines exemplars with class means for
+          class-incremental recognition; DER adds distillation on stored logits,
+          preserving not only labels but the model's former function. The
+          weakness is obvious: replay costs memory, can violate privacy
+          constraints, and forces papers to report results under fixed buffer
+          budgets.
+        </p>
+
+        <h3>2. Regularization Helps, But It Is Not Magic</h3>
+        <p>
+          EWC estimates parameter importance, often through the Fisher
+          information, and discourages updates to important weights. SI and MAS
+          estimate importance differently; LwF uses distillation so the new model
+          preserves old outputs without old images. These methods are elegant
+          because they avoid raw-data storage, but they struggle when class
+          boundaries require old examples, especially in class-incremental
+          protocols.
+        </p>
+
+        <h3>3. Gradient Editing Makes Stability a Constraint</h3>
+        <p>
+          GEM stores a small episodic memory and projects the gradient so the
+          update does not increase loss on previous tasks. A-GEM simplifies this
+          by comparing against an averaged reference gradient. This family treats
+          forgetting as an optimization constraint rather than only a memory
+          problem. It is attractive when one wants mathematical clarity, but
+          gradient projection becomes awkward at modern model scale.
+        </p>
+
+        <h3>4. Pretrained Models Change the Game</h3>
+        <p>
+          With strong pretrained vision or language backbones, continual learning
+          often shifts from "protect all weights" to "learn the right small
+          handle." Prompt-based methods such as L2P, DualPrompt, and CODA-Prompt
+          freeze most of the backbone and learn task-relevant prompts. RanPAC
+          goes further toward simple representation geometry by combining
+          pretrained features with random projections and prototype-like
+          classifiers. This line belongs to parameter-efficient, representation-
+          and architecture-based CL.
+        </p>
+
+        <h3>5. LLM Continual Learning Is Mostly About Scale and Interfaces</h3>
+        <p>
+          For large language models, naive full fine-tuning is expensive and can
+          damage old capabilities. Current lines include continual pretraining
+          with replay mixtures and careful learning-rate schedules, continual
+          instruction tuning, PEFT modules such as LoRA/adapters, model editing
+          for localized knowledge changes, and retrieval or agent memory. These
+          are not interchangeable: RAG changes the context, PEFT changes a small
+          parameter subset, editing changes localized associations, and
+          continual pretraining changes the base distribution.
+        </p>
+
+        <h3>6. Memory-Layer Models Blur the Boundary</h3>
+        <p>
+          A newer direction asks whether the model can carry trainable memory
+          inside the architecture. TTT layers update hidden-state models at test
+          time; Titans adds a neural long-term memory module; nested-learning or
+          HOPE-style proposals treat parts of the model as smaller optimization
+          systems with different time-scales. These ideas connect continual
+          learning, long-context modeling, fast weights, and agent memory. I
+          would classify them as test-time learning or internal memory, adjacent
+          to but not identical with classical supervised CL benchmarks.
+        </p>
+
+        <h3>7. Continual RL Is Its Own Problem</h3>
+        <p>
+          Reinforcement learning adds non-stationarity from the policy itself.
+          A world model, value function, reward model, and actor can forget at
+          different rates. Replay and regularization help, but the metric should
+          include retained behavior, sample efficiency on new tasks, safety under
+          distribution shift, and whether the agent can reuse skills rather than
+          merely preserve classifiers.
+        </p>
+      </section>
+
+      <section id="reading">
+        <h2>How I Read the Field</h2>
+        <p>
+          The most honest way to compare continual learning methods is to ask
+          four questions. First: what information is available at test time?
+          Second: where is memory stored? Third: how much compute and parameter
+          growth are allowed? Fourth: does the method improve the current task,
+          preserve old tasks, or actually transfer between them?
+        </p>
+        <p>
+          My current view is that replay plus good representation learning is
+          still the strongest classical recipe, while foundation-model CL is
+          moving toward small adaptive interfaces: prompts, adapters, retrieval
+          stores, and memory modules. The open question is whether these
+          interfaces can become genuine learning rather than careful caching. A
+          good continual learner should not only remember; it should decide what
+          deserves to become part of itself.
+        </p>
+      </section>
+
+      <section class="references" aria-labelledby="references">
+        <h2 id="references">References and Further Reading</h2>
+        <ol>
+          <li>
+            Shawn Wang,
+            <a href="https://pengxiang-wang.com/posts/2024-09-23-continual-learning-beginners-guide">
+              A Beginner's Guide to Continual Learning
+            </a>.
+          </li>
+          <li>
+            Shawn Wang,
+            <a href="https://pengxiang-wang.github.io/posts/continual_learning/">
+              Continual Learning Basics
+            </a>.
+          </li>
+          <li>
+            Gido M. van de Ven, Tinne Tuytelaars, and Andreas S. Tolias,
+            <a href="https://doi.org/10.1038/s42256-022-00568-3">
+              Three types of incremental learning
+            </a>.
+          </li>
+          <li>
+            James Kirkpatrick et al.,
+            <a href="https://doi.org/10.1073/pnas.1611835114">
+              Overcoming catastrophic forgetting in neural networks
+            </a>.
+          </li>
+          <li>
+            Zhizhong Li and Derek Hoiem,
+            <a href="https://arxiv.org/abs/1606.09282">
+              Learning without Forgetting
+            </a>.
+          </li>
+          <li>
+            Sylvestre-Alvise Rebuffi et al.,
+            <a href="https://openaccess.thecvf.com/content_cvpr_2017/papers/Rebuffi_iCaRL_Incremental_Classifier_CVPR_2017_paper.pdf">
+              iCaRL: Incremental Classifier and Representation Learning
+            </a>.
+          </li>
+          <li>
+            David Lopez-Paz and Marc'Aurelio Ranzato,
+            <a href="https://papers.nips.cc/paper/2017/hash/f87522788a2be2d171666752f97ddebb-Abstract.html">
+              Gradient Episodic Memory for Continual Learning
+            </a>.
+          </li>
+          <li>
+            Arslan Chaudhry et al.,
+            <a href="https://arxiv.org/abs/1812.00420">
+              Efficient Lifelong Learning with A-GEM
+            </a>.
+          </li>
+          <li>
+            Pietro Buzzega et al.,
+            <a href="https://papers.nips.cc/paper/2020/hash/b704ea2c39778f07c617f6b7ce480e9e-Abstract.html">
+              Dark Experience for General Continual Learning
+            </a>.
+          </li>
+          <li>
+            Zifeng Wang et al.,
+            <a href="https://openaccess.thecvf.com/content/CVPR2022/html/Wang_Learning_To_Prompt_for_Continual_Learning_CVPR_2022_paper.html">
+              Learning to Prompt for Continual Learning
+            </a>.
+          </li>
+          <li>
+            James Seale Smith et al.,
+            <a href="https://openaccess.thecvf.com/content/CVPR2023/html/Smith_CODA-Prompt_COntinual_Decomposed_Attention-Based_Prompting_for_Rehearsal-Free_Continual_Learning_CVPR_2023_paper.html">
+              CODA-Prompt
+            </a>.
+          </li>
+          <li>
+            Zhiqiu Lin et al.,
+            <a href="https://datasets-benchmarks-proceedings.neurips.cc/paper_files/paper/2021/hash/2838023a778dfaecdc212708f721b788-Abstract-round2.html">
+              The CLEAR Benchmark
+            </a>.
+          </li>
+          <li>
+            Vincenzo Lomonaco and Davide Maltoni,
+            <a href="https://proceedings.mlr.press/v78/lomonaco17a.html">
+              CORe50
+            </a>.
+          </li>
+          <li>
+            Damian Wolczyk et al.,
+            <a href="https://proceedings.neurips.cc/paper_files/paper/2021/hash/ef8446f35513a8d6aa2308357a268a7e-Abstract.html">
+              Continual World
+            </a>.
+          </li>
+          <li>
+            Ibrahim et al.,
+            <a href="https://arxiv.org/abs/2403.08763">
+              Simple and Scalable Strategies to Continually Pre-train Large Language Models
+            </a>.
+          </li>
+          <li>
+            Yu Sun et al.,
+            <a href="https://arxiv.org/abs/2407.04620">
+              Learning to (Learn at Test Time)
+            </a>.
+          </li>
+          <li>
+            Ali Behrouz, Peilin Zhong, and Vahab Mirrokni,
+            <a href="https://arxiv.org/abs/2501.00663">
+              Titans: Learning to Memorize at Test Time
+            </a>.
+          </li>
+          <li>
+            Google Research,
+            <a href="https://research.google/blog/introducing-nested-learning-a-new-ml-paradigm-for-continual-learning/">
+              Introducing Nested Learning
+            </a>.
+          </li>
+          <li>
+            A community pointer rather than a formal source:
+            <a href="https://www.reddit.com/r/artificial/comments/1u40uys/continual_learning_in_mid2026_a_map_of_everyone/">
+              Continual learning in mid-2026
+            </a>.
+          </li>
+        </ol>
+      </section>
+    </main>
+
+    <footer>
+      <p>Contents licensed under <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>.</p>
+    </footer>
+  </body>
+</html>
