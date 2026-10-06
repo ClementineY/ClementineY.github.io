@@ -51,11 +51,19 @@
         <h2>Problem Setup</h2>
         <p>
           A continual learner receives tasks or experiences
-          <code>D1, D2, ..., Dt</code> in order. After training on
-          <code>Dt</code>, the model <code>f_t</code> should perform well on
-          all seen test distributions <code>D1_test, ..., Dt_test</code>. The
-          phrase "continual" therefore has two parts: the data are sequential,
-          and evaluation is cumulative.
+          <code>D(1), D(2), ..., D(t)</code> in order. Each task has its own
+          dataset <code>D(t) = {(x_i, y_i)}, i = 1..N_t</code>, with inputs in
+          <code>X(t)</code> and labels in <code>Y(t)</code>. At step
+          <code>t</code>, the algorithm uses only <code>D(t)</code> to update
+          the previous model <code>f(t-1)</code> into <code>f(t)</code>.
+        </p>
+        <p>
+          The goal is that <code>f(t)</code> handles <strong>all</strong> tasks
+          seen so far: for any input
+          <code>x</code> in <code>X(1) ∪ ... ∪ X(t)</code>, it should output a
+          label <code>ŷ</code> in <code>Y(1) ∪ ... ∪ Y(t)</code>. The word
+          "continual" therefore has two parts: the data are sequential, and
+          evaluation is cumulative.
         </p>
         <p>
           The standard failure mode is <strong>catastrophic forgetting</strong>:
@@ -64,35 +72,68 @@
           A model that is too stable cannot learn the new distribution; a model
           that is too plastic forgets the past.
         </p>
+
+        <h3>Formal Scenarios</h3>
         <p>
-          Continual learning is easiest to reason about when the test protocol is
-          explicit:
+          The three standard scenarios differ in how the label spaces
+          <code>Y(t)</code> and input spaces <code>X(t)</code> relate, and in
+          what the model is told at test time:
         </p>
         <ul>
           <li>
-            <strong>Task-incremental learning.</strong> The task identity is
-            known at test time. The model can choose the right head or prompt for
-            the task, so this is often the easiest protocol.
+            <strong>Task-incremental learning (TIL).</strong> The task ID
+            <code>t_x</code> of each test input is known. The problem reduces to
+            mapping <code>x</code> in <code>X(t_x)</code> to
+            <code>ŷ</code> in <code>Y(t_x)</code>, so the model only chooses
+            among that task's labels. This is usually the easiest protocol.
           </li>
           <li>
-            <strong>Domain-incremental learning.</strong> The label space is
-            shared, but the input distribution changes: new lighting, style,
-            sensor, geography, time period, or user population.
+            <strong>Domain-incremental learning (DIL).</strong> The label space
+            stays the same, <code>Y(1) = ... = Y(t)</code>, but the input
+            distributions <code>X(1), ..., X(t)</code> differ: new lighting,
+            style, sensor, geography, time period, or user population.
           </li>
           <li>
-            <strong>Class-incremental learning.</strong> New classes arrive over
-            time, and test examples must be classified among all seen classes
-            without a task ID. This is usually the hardest common image
-            classification setting because new-task data contain no old-class
-            negatives.
+            <strong>Class-incremental learning (CIL).</strong> The label sets
+            are disjoint, for example
+            <code>Y1 = {C1, ..., C_k1}</code> and
+            <code>Y2 = {C_k1+1, ..., C_k2}</code>. No task ID is given at test
+            time, so the model must classify among all classes seen so far.
           </li>
           <li>
             <strong>Task-free or online continual learning.</strong> Task
             boundaries are unknown, or examples arrive in a stream with a small
-            number of passes. This is closer to deployment, but harder to compare
-            cleanly across papers.
+            number of passes. This is closer to deployment, but harder to
+            compare cleanly across papers.
           </li>
         </ul>
+
+        <h3>Why CIL Is Harder Than TIL</h3>
+        <p>
+          The word "all" matters here. A common misconception about CIL is that
+          training on task <code>t</code> only requires separating the classes
+          in <code>Y(t)</code>. In fact, the model must separate
+          <code>Y(1) ∪ ... ∪ Y(t)</code>, which is the difference between a
+          multi-head model (one head per task, task ID given) and a single-head
+          model. The classification problem grows with every task, and the
+          current task's data contain no old-class negatives. CIL is therefore
+          considerably harder than TIL.
+        </p>
+
+        <h3>Protocol Notes</h3>
+        <ul>
+          <li>
+            The learner never knows how many tasks will arrive. Benchmarks fix a
+            total of <code>T</code> tasks, <code>t = 1, ..., T</code>, mainly so
+            metrics can be computed, but algorithms must not use
+            <code>T</code> at any point.
+          </li>
+          <li>
+            In CIL, the first task should contain at least two classes. Later
+            tasks have no size restriction.
+          </li>
+        </ul>
+      </section>
         
       </section>
             <section id="landscape">
