@@ -48,6 +48,7 @@
 
       <section id="setup">
         <h2>Problem Setup</h2>
+        <li><a href="#landscape">Where Continual Learning Fits</a></li>
         <p>
           A continual learner receives tasks or experiences
           <code>D1, D2, ..., Dt</code> in order. After training on
@@ -92,6 +93,46 @@
             cleanly across papers.
           </li>
         </ul>
+        
+      </section>
+            <section id="landscape">
+        <h2>Where Continual Learning Fits</h2>
+        <figure>
+          <img
+            src="/images/learning_setups.jpg"
+            alt="Diagram comparing standard supervised learning, multi-task learning, transfer learning, meta learning, domain adaptation, online learning, and continual learning by their training and test data flows."
+            loading="lazy"
+            style="max-width:100%;height:auto;"
+          >
+          <figcaption>
+            Learning setups compared by what the learner sees during training
+            and what it is tested on. Blue boxes are training tasks, orange
+            boxes are learners, and green boxes are test or prediction
+            distributions.
+          </figcaption>
+        </figure>
+        <p>
+          Continual learning is easiest to understand next to its neighbors. In
+          <strong>standard supervised learning</strong>, one task and one
+          distribution are used for both training and testing. In
+          <strong>multi-task learning</strong>, several tasks are trained
+          together, and the model is tested on all of them. All task data are
+          available at once.
+        </p>
+        <p>
+          <strong>Transfer learning</strong> and <strong>domain adaptation</strong>
+          train on a source and care mainly about a target. They do not require
+          the source to stay good. <strong>Meta learning</strong> trains across
+          many tasks so that the learner can adapt quickly to a new one.
+        </p>
+        <p>
+          <strong>Online learning</strong> sees a stream of examples, but from a
+          single fixed distribution. <strong>Continual learning</strong> also
+          uses a stream, but the distribution changes over time
+          (<code>D1, ..., Dt</code>). The learner must adapt to the new data
+          without losing performance on earlier ones. That is the source of the
+          forgetting problem described above.
+        </p>
       </section>
 
       <section id="benchmarks">
@@ -371,9 +412,7 @@
           still the strongest classical recipe, while foundation-model CL is
           moving toward small adaptive interfaces: prompts, adapters, retrieval
           stores, and memory modules. The open question is whether these
-          interfaces can become genuine learning rather than careful caching. A
-          good continual learner should not only remember; it should decide what
-          deserves to become part of itself.
+          interfaces can become genuine learning rather than careful caching. 
         </p>
       </section>
 
