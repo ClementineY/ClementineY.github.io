@@ -346,3 +346,11 @@ th {
     padding: 1.35rem;
   }
 }
+
+/* Bow mouse cursor across the site, including interactive controls. */
+html, body, body * {
+  cursor: url("/assets/bow-cursor.svg") 16 15, auto;
+}
+a, button, [role="button"], input[type="submit"], summary {
+  cursor: url("/assets/bow-cursor.svg") 16 15, pointer;
+}
